@@ -1,0 +1,127 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Analytics Dashboard</title>
+
+    <link rel="stylesheet" href="{% static 'dashboard/style.css' %}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="main-wrapper">
+
+        <div class="sidebar">
+            <div class="logo-area">
+                <h2>Analytics</h2>
+                <p>Mini Analytics Platform</p>
+            </div>
+
+            <ul>
+                <li class="menu-item active" data-section="dashboard-section">Dashboard</li>
+                <li class="menu-item" data-section="upload-section">CSV Upload</li>
+                <li class="menu-item" data-section="analytics-section">Analytics API</li>
+            </ul>
+        </div>
+
+        <div class="content-area">
+
+            <div class="topbar">
+                <h1>Dashboard</h1>
+                <p>Upload CSV files and validate analytics data.</p>
+            </div>
+
+            <div class="stats-grid section" id="dashboard-section">
+                <div class="stat-card">
+                    <h3>CSV Upload</h3>
+                    <p>Upload advertiser, campaign, adgroup and performance CSV files.</p>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Validation</h3>
+                    <p>Automatic validation for foreign keys and invalid data.</p>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Analytics</h3>
+                    <p>CTR, CPC, aggregation and filtering supported.</p>
+                </div>
+            </div>
+
+            <div class="upload-card section" id="upload-section" style="display:none;">
+                <div class="card-header">
+                    <h2>Upload File</h2>
+                    <p>Select a file type and upload data.</p>
+                </div>
+
+                <form id="uploadForm">
+                    {% csrf_token %}
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Select File Type</label>
+                            <select id="fileType">
+                                <option value="csv">CSV</option>
+                                <option value="pdf">PDF</option>
+                                <option value="docx">DOCX</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Choose File</label>
+                            <input type="file" id="fileInput" accept=".csv,.pdf,.docx">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="upload-btn">Upload File</button>
+                </form>
+
+                <div id="messageBox" class="message-box" style="display:none;"></div>
+
+                <div class="upload-result-area">
+                    <h3>Upload Result</h3>
+                    <pre id="resultBox" class="result-box">No file uploaded yet.</pre>
+                </div>
+            </div>
+
+            <div class="result-card section" id="analytics-section" style="display:none;">
+                <div class="card-header">
+                    <h2>Analytics API</h2>
+                    <p>Supported endpoint and query options.</p>
+                </div>
+
+                <pre class="result-box">GET /api/v1/analytics/
+
+Filters:
+- advertiser
+- campaign
+- adgroup
+- start_date
+- end_date
+
+Group By:
+- advertiser
+- campaign
+- adgroup
+- date
+
+Metrics:
+- clicks
+- impressions
+- cost
+- CTR
+- CPC</pre>
+            </div>
+
+        </div>
+    </div>
+
+   <script src="{% static 'dashboard/app.js' %}"></script>
+
+</body>
+</html>

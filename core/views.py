@@ -3,23 +3,32 @@ from rest_framework.response import Response
 from rest_framework import status
 import csv
 from io import TextIOWrapper
-from .models import Advertiser, Campaign, AdGroup, PerformanceReport
-from django.db.models import Sum, F, FloatField, ExpressionWrapper 
+
+from django.db import transaction
+from django.db.models import Sum, F, FloatField, ExpressionWrapper
 from django.db.models.functions import Cast
-# F : Field reference. 
-# ExpressionWrapper : omplex calculation wrap
+
+from .models import Advertiser, Campaign, AdGroup, PerformanceReport
+from .serializers import CSVUploadSerializer
+from .validation import (
+    validate_advertiser_row,
+    validate_campaign_row,
+    validate_adgroup_row,
+    validate_performance_row,
+)
+
+# F : Field reference.
+# ExpressionWrapper : complex calculation wrap
 # Cast : type convert (int → float)
 
 class CSVIngestAPIView(APIView):
 
     def post(self, request):
-        file = request.FILES.get('file')
+        serializer = CSVUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not file:
-            return Response(
-                {"error": "No file uploaded"},
-                status=400
-            )
+        file = serializer.validated_data["file"]
 
         file_name = file.name.lower()
 
@@ -32,171 +41,145 @@ class CSVIngestAPIView(APIView):
         errors = []
 
         try:
+            with transaction.atomic():
 
-            # Advertiser Upload
-            if "advertiser" in file_name:
+                # Advertiser Upload
+                if "advertiser" in file_name:
 
-                advertisers_to_create = []
+                    advertisers_to_create = []
 
-                for row in reader:
-                    try:
-                        advertisers_to_create.append(
-                            Advertiser(
-                                name=row['name']
+                    for row in reader:
+                        try:
+                            cleaned = validate_advertiser_row(row)
+
+                            advertisers_to_create.append(
+                                Advertiser(name=cleaned["name"])
                             )
-                        )
-                        inserted += 1
+                            inserted += 1
 
-                    except Exception as e:
-                        failed += 1
-                        errors.append({
-                            "row": row,
-                            "error": str(e)
-                        })
+                        except Exception as e:
+                            failed += 1
+                            errors.append({
+                                "row": row,
+                                "error": str(e)
+                            })
 
-                Advertiser.objects.bulk_create(
-                    advertisers_to_create,
-                    ignore_conflicts=True
-                )
+                    Advertiser.objects.bulk_create(
+                        advertisers_to_create,
+                        ignore_conflicts=True
+                    )
 
-            # Campaign Upload
-            elif "campaign" in file_name:
+                # Campaign Upload
+                elif "campaign" in file_name:
 
-                advertisers = Advertiser.objects.all()
+                    advertiser_map = {
+                        adv.name: adv
+                        for adv in Advertiser.objects.all()
+                    }
 
-                advertiser_map = {
-                    adv.name: adv
-                    for adv in advertisers
-                }
+                    campaigns_to_create = []
 
-                campaigns_to_create = []
+                    for row in reader:
+                        try:
+                            cleaned = validate_campaign_row(row, advertiser_map)
 
-                for row in reader:
-                    try:
-                        advertiser = advertiser_map.get(
-                            row['advertiser_name']
-                        )
-
-                        if not advertiser:
-                            raise Exception("Advertiser not found")
-
-                        campaigns_to_create.append(
-                            Campaign(
-                                name=row['name'],
-                                advertiser=advertiser,
-                                start_date=row['start_date'],
-                                end_date=row['end_date']
+                            campaigns_to_create.append(
+                                Campaign(
+                                    name=cleaned["name"],
+                                    advertiser=cleaned["advertiser"],
+                                    start_date=cleaned["start_date"],
+                                    end_date=cleaned["end_date"]
+                                )
                             )
-                        )
 
-                        inserted += 1
+                            inserted += 1
 
-                    except Exception as e:
-                        failed += 1
-                        errors.append({
-                            "row": row,
-                            "error": str(e)
-                        })
+                        except Exception as e:
+                            failed += 1
+                            errors.append({
+                                "row": row,
+                                "error": str(e)
+                            })
 
-                Campaign.objects.bulk_create(
-                    campaigns_to_create
-                )
+                    Campaign.objects.bulk_create(campaigns_to_create)
 
-            # AdGroup Upload
-            elif "adgroup" in file_name:
+                # AdGroup Upload
+                elif "adgroup" in file_name:
 
-                campaigns = Campaign.objects.all()
+                    campaign_map = {
+                        camp.name: camp
+                        for camp in Campaign.objects.all()
+                    }
 
-                campaign_map = {
-                    camp.name: camp
-                    for camp in campaigns
-                }
+                    adgroups_to_create = []
 
-                adgroups_to_create = []
+                    for row in reader:
+                        try:
+                            cleaned = validate_adgroup_row(row, campaign_map)
 
-                for row in reader:
-                    try:
-                        campaign = campaign_map.get(
-                            row['campaign_name']
-                        )
-
-                        if not campaign:
-                            raise Exception("Campaign not found")
-
-                        adgroups_to_create.append(
-                            AdGroup(
-                                name=row['name'],
-                                campaign=campaign
+                            adgroups_to_create.append(
+                                AdGroup(
+                                    name=cleaned["name"],
+                                    campaign=cleaned["campaign"]
+                                )
                             )
-                        )
 
-                        inserted += 1
+                            inserted += 1
 
-                    except Exception as e:
-                        failed += 1
-                        errors.append({
-                            "row": row,
-                            "error": str(e)
-                        })
+                        except Exception as e:
+                            failed += 1
+                            errors.append({
+                                "row": row,
+                                "error": str(e)
+                            })
 
-                AdGroup.objects.bulk_create(
-                    adgroups_to_create
-                )
+                    AdGroup.objects.bulk_create(adgroups_to_create)
 
-            # Performance Upload
-            elif "performance" in file_name:
+                # Performance Upload
+                elif "performance" in file_name:
 
-                adgroups = AdGroup.objects.all()
+                    adgroup_map = {
+                        adg.name: adg
+                        for adg in AdGroup.objects.all()
+                    }
 
-                adgroup_map = {
-                    adg.name: adg
-                    for adg in adgroups
-                }
+                    performance_to_create = []
 
-                performance_to_create = []
+                    for row in reader:
+                        try:
+                            cleaned = validate_performance_row(row, adgroup_map)
 
-                for row in reader:
-                    try:
-                        adgroup = adgroup_map.get(
-                            row['adgroup_name']
-                        )
-
-                        if not adgroup:
-                            raise Exception("AdGroup not found")
-
-                        performance_to_create.append(
-                            PerformanceReport(
-                                date=row['date'],
-                                adgroup=adgroup,
-                                clicks=int(row['clicks']),
-                                impressions=int(row['impressions']),
-                                cost=float(row['cost'])
+                            performance_to_create.append(
+                                PerformanceReport(
+                                    date=cleaned["date"],
+                                    adgroup=cleaned["adgroup"],
+                                    clicks=cleaned["clicks"],
+                                    impressions=cleaned["impressions"],
+                                    cost=cleaned["cost"]
+                                )
                             )
-                        )
 
-                        inserted += 1
+                            inserted += 1
 
-                    except Exception as e:
-                        failed += 1
-                        errors.append({
-                            "row": row,
-                            "error": str(e)
-                        })
+                        except Exception as e:
+                            failed += 1
+                            errors.append({
+                                "row": row,
+                                "error": str(e)
+                            })
 
-                PerformanceReport.objects.bulk_create(
-                    performance_to_create
-                )
+                    PerformanceReport.objects.bulk_create(performance_to_create)
 
-            else:
-                return Response(
-                    {"error": "Invalid file type"},
-                    status=400
-                )
+                else:
+                    return Response(
+                        {"error": "Invalid file type"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
         except Exception as e:
             return Response(
                 {"error": str(e)},
-                status=500
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
         return Response({
@@ -204,6 +187,7 @@ class CSVIngestAPIView(APIView):
             "failed": failed,
             "errors": errors
         }, status=status.HTTP_200_OK)
+
 
 class AnalyticsAPIView(APIView):
 

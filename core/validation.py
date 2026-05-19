@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 
 def validate_advertiser_row(row):
     name = row.get("name")
-    if not name or not str(name).strip():
+    if not name or not str(name).strip(): # # Removes extra spaces from beginning and end of the string
         raise ValidationError("Name is required")
 
     return {"name": str(name).strip()}

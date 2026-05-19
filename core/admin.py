@@ -99,7 +99,7 @@ class CSVUploadAdmin(admin.ModelAdmin):
 
                 # Create advertiser lookup dictionary
                 advertiser_map = {
-                    a.name: a for a in Advertiser.objects.all()
+                    a.name: a for a in Advertiser.objects.all()  # lookup map 
                 }
 
                 campaigns_to_create = []
